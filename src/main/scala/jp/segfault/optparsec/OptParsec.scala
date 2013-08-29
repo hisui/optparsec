@@ -23,7 +23,7 @@ object OptParsec {
   }
 
   implicit def toOpt(raw:Symbol):Opt[String] = {
-    val E = raw.toString
+    val E = raw.name
     new Match({ case E :: tl => Out(E, tl) })
   }
 
