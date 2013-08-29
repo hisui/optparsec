@@ -31,13 +31,13 @@ object OptParsec {
     def map[B](f: A => B):Out[B] = copy(f(raw))
   }
 
-  trait Opt[A] extends (Seq[String] => Try[A]) { lhs =>
+  trait Opt[A] extends (Seq[String] => Stream[A]) { lhs =>
 
-    override def apply(args:Seq[String]):Try[A] = {
+    override def apply(args:Seq[String]):Stream[A] = {
       parse(args.toList).map(_.raw)
     }
 
-    def parse(l:List[String]):Try[Out[A]]
+    def parse(l:List[String]):Stream[Out[A]]
 
     def build:Comment = Uncommented
 
@@ -49,27 +49,32 @@ object OptParsec {
     }
 
     def map[B](f: A => B):Opt[B] = new Opt[B] {
-      def parse(l:List[String]):Try[Out[B]] = lhs.parse(l).map(_.map(f))
+      def parse(l:List[String]):Stream[Out[B]] = lhs.parse(l).map(_.map(f))
     } as lhs.build
 
     def |[B <: X,X >: A](rhs:Opt[B]):Opt[X] = new Opt[X] {
-      def parse(l:List[String]):Try[Out[X]] = lhs.parse(l).recoverWith { case _ => rhs.parse(l) }
+      def parse(l:List[String]):Stream[Out[X]] =
+        ( lhs.parse(l).asInstanceOf[Stream[Out[X]]] append
+          rhs.parse(l).asInstanceOf[Stream[Out[X]]]
+        ) 
     } as new |(lhs.build, rhs.build)
 
     def ? :Opt[Option[A]] = new Opt[Option[A]] {
-      def parse(l:List[String]):Try[Out[Option[A]]] =
-        lhs.parse(l).map(_.map(Option(_))) orElse Try(Out(None, l))
+      def parse(l:List[String]):Stream[Out[Option[A]]] =
+        lhs.parse(l).map(_.map(Option(_))) append Stream(Out(None, l))
     } as new ?(lhs.build)
 
     def ~>[B](rhs:Opt[B]):Opt[B] = lhs / rhs map (_.b)
 
     def <~[B](rhs:Opt[B]):Opt[A] = lhs / rhs map (_.a)
 
-    def %[B](rhs:Opt[B])(implicit wt: A =:= Boolean):Opt[B] =
-      lhs.map(e => wt(e) || (throw new Exception())) / rhs map (_.b)
+    def %[B](rhs:Opt[B])(implicit wt: A =:= Boolean):Opt[B] = new Opt[B] {
+      override def parse(l:List[String]):Stream[Out[B]] =
+        lhs.parse(l).flatMap(e => if (wt(e.raw)) rhs.parse(e.next) else Stream())
+    }
 
     def /[B](rhs:Opt[B]):Opt[A^B] = new Opt[A^B] {
-      override def parse(l:List[String]):Try[Out[A^B]] =
+      override def parse(l:List[String]):Stream[Out[A^B]] =
         for {
           a <- lhs.parse(l)
           b <- rhs.parse(a.next)
@@ -88,7 +93,7 @@ object OptParsec {
 
   private[optparsec] class Match[A](f: PartialFunction[List[String],Out[A]]) extends Opt[A] {
 
-    def parse(l:List[String]):Try[Out[A]] = Try(l).map(f)
+    def parse(l:List[String]):Stream[Out[A]] = Stream(l).collect(f)
   }
 
   def value[A](f: String => A) = new Match[A]({ case e :: tl => Out(f(e), tl) })
@@ -118,6 +123,8 @@ object OptParsec {
 
   implicit val cast0:Cast[String] = e => Try(e)
   implicit val cast1:Cast[Int]    = e => Try(e.toInt)
+
+
 
 }
 
