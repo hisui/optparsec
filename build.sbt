@@ -1,10 +1,8 @@
-import AssemblyKeys._
-
 name := "optparsec"
 
-version := "0.1"
+version := "0.2"
 
-scalaVersion := "2.10.2"
+scalaVersion := "2.11.11"
 
 scalacOptions in Compile := Seq("-feature" /* , "-Xlog-implicits" */)
 
@@ -14,8 +12,6 @@ import N._
 import HLists._
 """
 
-assemblySettings
+assembleArtifact in assemblyPackageScala := false
 
-assembleArtifact in packageScala := false
-
-jarName in assembly := "optparsec-0.1.jar"
+assemblyJarName in assembly := "optparsec-0.2.jar"
